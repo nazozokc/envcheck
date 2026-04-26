@@ -1,23 +1,4 @@
 import { execa } from 'execa';
+import { createSimpleChecker } from './baseChecker';
 
-export const apkChecker = {
-  name: 'apk',
-  
-  async isAvailable(): Promise<boolean> {
-    try {
-      await execa('apk', ['--version']);
-      return true;
-    } catch {
-      return false;
-    }
-  },
-  
-  async check(pkg: string): Promise<boolean> {
-    try {
-      await execa('apk', ['info', pkg]);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-};
+export const apkChecker = createSimpleChecker('apk', ['apk']);

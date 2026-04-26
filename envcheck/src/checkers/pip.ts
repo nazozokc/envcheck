@@ -1,23 +1,4 @@
 import { execa } from 'execa';
+import { createSimpleChecker } from './baseChecker';
 
-export const pipChecker = {
-  name: 'pip',
-  
-  async isAvailable(): Promise<boolean> {
-    try {
-      await execa('pip', ['--version']);
-      return true;
-    } catch {
-      return false;
-    }
-  },
-  
-  async check(pkg: string): Promise<boolean> {
-    try {
-      await execa('pip', ['show', pkg]);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-};
+export const pipChecker = createSimpleChecker('pip', ['pip', 'show']);

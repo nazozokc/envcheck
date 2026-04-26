@@ -1,23 +1,4 @@
 import { execa } from 'execa';
+import { createSimpleChecker } from './baseChecker';
 
-export const aptChecker = {
-  name: 'apt',
-  
-  async isAvailable(): Promise<boolean> {
-    try {
-      await execa('dpkg', ['--version']);
-      return true;
-    } catch {
-      return false;
-    }
-  },
-  
-  async check(pkg: string): Promise<boolean> {
-    try {
-      await execa('dpkg', ['-l', pkg]);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-};
+export const aptChecker = createSimpleChecker('apt', ['dpkg']);

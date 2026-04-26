@@ -1,23 +1,4 @@
 import { execa } from 'execa';
+import { createSimpleChecker } from './baseChecker';
 
-export const pacmanChecker = {
-  name: 'pacman',
-  
-  async isAvailable(): Promise<boolean> {
-    try {
-      await execa('pacman', ['--version']);
-      return true;
-    } catch {
-      return false;
-    }
-  },
-  
-  async check(pkg: string): Promise<boolean> {
-    try {
-      await execa('pacman', ['-Q', pkg]);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-};
+export const pacmanChecker = createSimpleChecker('pacman', ['pacman']);
