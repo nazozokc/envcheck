@@ -1,5 +1,5 @@
 {
-  "name": "envcheck",
+  "name": "@nazozokc/envcheck",
   "module": "src/index.ts",
   "type": "module",
   "version": "1.0.0",
