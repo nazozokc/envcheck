@@ -54,21 +54,24 @@ program
       process.exit(2);
     }
 
-    let allOk = true;
+     let allOk = true;
 
-    for (const pkg of packages) {
-      const isInstalled = await checker.check(pkg);
-      const status = isInstalled ? "OK" : "NG";
-      const color = isInstalled ? "green" : "red";
+     for (const pkg of packages) {
+       const isInstalled = await checker.check(pkg);
+       const status = isInstalled ? "OK" : "NG";
 
-      // Pad package name for alignment (max 20 chars)
-      const paddedPkg = pkg.padEnd(20);
-      consola[color](`[${manager}] ${paddedPkg} ... ${status}`);
+       // Pad package name for alignment (max 20 chars)
+       const paddedPkg = pkg.padEnd(20);
+       if (isInstalled) {
+         consola.success(`[${manager}] ${paddedPkg} ... ${status}`);
+       } else {
+         consola.error(`[${manager}] ${paddedPkg} ... ${status}`);
+       }
 
-      if (!isInstalled) {
-        allOk = false;
-      }
-    }
+       if (!isInstalled) {
+         allOk = false;
+       }
+     }
 
     process.exit(allOk ? 0 : 1);
   });
