@@ -6,7 +6,7 @@
 ## インストール
 
 ```bash
-bun install
+bunx envcheck <package-manager> <tools...>
 ```
 
 ## 使用方法
