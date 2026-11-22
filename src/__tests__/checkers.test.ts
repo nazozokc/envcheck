@@ -1,239 +1,351 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { execa } from 'execa';
-import { nixChecker } from '../checkers/nix.js';
-import { aptChecker } from '../checkers/apt.js';
-import { pacmanChecker } from '../checkers/pacman.js';
-import { dnfChecker } from '../checkers/dnf.js';
-import { zypperChecker } from '../checkers/zypper.js';
-import { apkChecker } from '../checkers/apk.js';
-import { cargoChecker } from '../checkers/cargo.js';
-import { pipChecker } from '../checkers/pip.js';
-import { scoopChecker } from '../checkers/scoop.js';
-import { wingetChecker } from '../checkers/winget.js';
-import { brewChecker } from '../checkers/brew.js';
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { execa } from "execa";
+import type { Checker } from "../checkers/index.js";
+import { nixChecker } from "../checkers/nix.js";
+import { aptChecker } from "../checkers/apt.js";
+import { pacmanChecker } from "../checkers/pacman.js";
+import { scoopChecker } from "../checkers/scoop.js";
+import { brewChecker } from "../checkers/brew.js";
+import { wingetChecker } from "../checkers/winget.js";
+import { dnfChecker } from "../checkers/dnf.js";
+import { zypperChecker } from "../checkers/zypper.js";
+import { apkChecker } from "../checkers/apk.js";
+import { cargoChecker } from "../checkers/cargo.js";
+import { pipChecker } from "../checkers/pip.js";
+import { npmChecker } from "../checkers/npm.js";
+import { gemChecker } from "../checkers/gem.js";
+import { flatpakChecker } from "../checkers/flatpak.js";
+import { snapChecker } from "../checkers/snap.js";
+import { chocoChecker } from "../checkers/choco.js";
+import { composerChecker } from "../checkers/composer.js";
+import { dotnetChecker } from "../checkers/dotnet.js";
+import { condaChecker } from "../checkers/conda.js";
 
-vi.mock('execa', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('execa')>();
+vi.mock("execa", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("execa")>();
   return { ...actual, execa: vi.fn() };
 });
 
 const mockExeca = vi.mocked(execa);
 
-const resolveOnce = (stdout = ''): void => {
+function resolveOnce(stdout = ""): void {
   mockExeca.mockResolvedValueOnce({
     stdout,
   } as unknown as Awaited<ReturnType<typeof execa>>);
-};
+}
 
-const rejectOnce = (): void => {
-  mockExeca.mockRejectedValueOnce(new Error('command failed'));
-};
+function rejectOnce(): void {
+  mockExeca.mockRejectedValueOnce(new Error("command failed"));
+}
 
-describe('Checker Interface - Basic Structure', () => {
-  const checkers = [
-    nixChecker,
-    aptChecker,
-    pacmanChecker,
-    dnfChecker,
-    zypperChecker,
-    apkChecker,
-    cargoChecker,
-    pipChecker,
-    scoopChecker,
-    wingetChecker,
-    brewChecker,
-  ];
+interface SimpleCase {
+  name: string;
+  checker: Checker;
+  binary: string;
+  args: string[];
+  pkg: string;
+}
 
-  checkers.forEach((checker) => {
-    describe(`${checker.name}Checker`, () => {
-      it('should have a name property', () => {
-        expect(checker.name).toBeDefined();
-        expect(typeof checker.name).toBe('string');
-      });
+const simpleCases: SimpleCase[] = [
+  {
+    name: "pacman",
+    checker: pacmanChecker,
+    binary: "pacman",
+    args: ["-Q", "git"],
+    pkg: "git",
+  },
+  {
+    name: "dnf",
+    checker: dnfChecker,
+    binary: "dnf",
+    args: ["-q", "list", "installed", "git"],
+    pkg: "git",
+  },
+  {
+    name: "apk",
+    checker: apkChecker,
+    binary: "apk",
+    args: ["info", "-e", "git"],
+    pkg: "git",
+  },
+  {
+    name: "pip",
+    checker: pipChecker,
+    binary: "pip",
+    args: ["show", "git"],
+    pkg: "git",
+  },
+  {
+    name: "npm",
+    checker: npmChecker,
+    binary: "npm",
+    args: ["ls", "-g", "--depth=0", "typescript"],
+    pkg: "typescript",
+  },
+  {
+    name: "gem",
+    checker: gemChecker,
+    binary: "gem",
+    args: ["list", "-i", "-e", "rake"],
+    pkg: "rake",
+  },
+  {
+    name: "composer",
+    checker: composerChecker,
+    binary: "composer",
+    args: ["global", "show", "phpunit"],
+    pkg: "phpunit",
+  },
+];
 
-      it('should have isAvailable method', () => {
-        expect(typeof checker.isAvailable).toBe('function');
-      });
+interface OutputCase {
+  name: string;
+  checker: Checker;
+  binary: string;
+  args: string[];
+  pkg: string;
+  installed: string;
+  missing: string;
+}
 
-      it('should have check method', () => {
-        expect(typeof checker.check).toBe('function');
-      });
-    });
+const outputCases: OutputCase[] = [
+  {
+    name: "apt",
+    checker: aptChecker,
+    binary: "dpkg-query",
+    args: ["-W", "-f=${Status}", "git"],
+    pkg: "git",
+    installed: "install ok installed\n",
+    missing: "deinstall ok config-files\n",
+  },
+  {
+    name: "zypper",
+    checker: zypperChecker,
+    binary: "zypper",
+    args: ["--quiet", "se", "--installed-only", "--exact", "git"],
+    pkg: "git",
+    installed:
+      "S  | Name | Type    | Version | Arch\n i | git  | package | 2.39.0  | x86_64\n",
+    missing: "S  | Name | Type | Version | Arch\n",
+  },
+  {
+    name: "choco",
+    checker: chocoChecker,
+    binary: "choco",
+    args: ["list", "--local-only", "--exact", "git"],
+    pkg: "git",
+    installed: "Packages found locally: 1\ngit\n",
+    missing: "Packages found locally: 0\n",
+  },
+  {
+    name: "conda",
+    checker: condaChecker,
+    binary: "conda",
+    args: ["list", "numpy"],
+    pkg: "numpy",
+    installed: "# Name                    Version\nnumpy                    1.24.0\n",
+    missing: "# Name                    Version\n",
+  },
+];
+
+interface ListCase {
+  name: string;
+  checker: Checker;
+  binary: string;
+  listArgs: string[];
+  output: string;
+  installed: string;
+  missing: string;
+}
+
+const listCases: ListCase[] = [
+  {
+    name: "brew",
+    checker: brewChecker,
+    binary: "brew",
+    listArgs: ["list"],
+    output: "git\nnode\n",
+    installed: "git",
+    missing: "python",
+  },
+  {
+    name: "scoop",
+    checker: scoopChecker,
+    binary: "scoop",
+    listArgs: ["list"],
+    output: "git 2.40.0\nnode 18.17.0\n",
+    installed: "node",
+    missing: "python",
+  },
+  {
+    name: "winget",
+    checker: wingetChecker,
+    binary: "winget",
+    listArgs: ["list"],
+    output: "Git.Git 2.40.0\nNodejs.NodeJS 18.17.0\n",
+    installed: "Nodejs.NodeJS",
+    missing: "Python.Python",
+  },
+  {
+    name: "cargo",
+    checker: cargoChecker,
+    binary: "cargo",
+    listArgs: ["install", "--list"],
+    output: "git-delta v0.16.1:\n    /home/user/.cargo/bin/delta\n",
+    installed: "git-delta",
+    missing: "ripgrep",
+  },
+  {
+    name: "flatpak",
+    checker: flatpakChecker,
+    binary: "flatpak",
+    listArgs: ["list", "--app", "--columns=application"],
+    output: "org.gimp.GIMP\norg.mozilla.firefox\n",
+    installed: "org.gimp.GIMP",
+    missing: "org.inkscape.Inkscape",
+  },
+  {
+    name: "snap",
+    checker: snapChecker,
+    binary: "snap",
+    listArgs: ["list"],
+    output: "Name   Version   Rev\ncore   20-2      1\nnode   18.17.0   2\n",
+    installed: "node",
+    missing: "code",
+  },
+  {
+    name: "dotnet",
+    checker: dotnetChecker,
+    binary: "dotnet",
+    listArgs: ["tool", "list", "-g"],
+    output: "Package Id      Version   Commands\n--------------  -------   --------\ndotnet-say      1.0.0     dotnet-say\n",
+    installed: "dotnet-say",
+    missing: "dotnet-foo",
+  },
+];
+
+beforeEach(() => {
+  vi.resetAllMocks();
+});
+
+describe.each(simpleCases)("$name checker", ({ checker, binary, args, pkg }) => {
+  it("checks availability with --version", async () => {
+    resolveOnce();
+
+    expect(await checker.isAvailable()).toBe(true);
+    expect(mockExeca).toHaveBeenCalledWith(binary, ["--version"]);
+  });
+
+  it("treats a failed version command as unavailable", async () => {
+    rejectOnce();
+
+    expect(await checker.isAvailable()).toBe(false);
+  });
+
+  it("checks the package with the exact command arguments", async () => {
+    resolveOnce();
+
+    expect((await checker.check(pkg)).installed).toBe(true);
+    expect(mockExeca).toHaveBeenCalledWith(binary, args);
+  });
+
+  it("treats a failed package command as not installed", async () => {
+    rejectOnce();
+
+    expect((await checker.check(pkg)).installed).toBe(false);
   });
 });
 
-describe('Checker Functionality', () => {
-  beforeEach(() => {
-    vi.resetAllMocks();
+describe.each(outputCases)("$name checker", ({ checker, binary, args, pkg, installed, missing }) => {
+  it("checks availability with --version", async () => {
+    resolveOnce();
+
+    expect(await checker.isAvailable()).toBe(true);
+    expect(mockExeca).toHaveBeenCalledWith(binary, ["--version"]);
   });
 
-  describe('Simple Checkers (apt, pacman, dnf, zypper, apk, cargo, pip)', () => {
-    const simpleCheckers = [
-      { checker: aptChecker, command: ['dpkg'] },
-      { checker: pacmanChecker, command: ['pacman'] },
-      { checker: dnfChecker, command: ['dnf'] },
-      { checker: zypperChecker, command: ['zypper'] },
-      { checker: apkChecker, command: ['apk'] },
-      { checker: cargoChecker, command: ['cargo', 'install', '--list'] },
-      { checker: pipChecker, command: ['pip', 'show'] },
-    ];
+  it("matches the installed marker in stdout", async () => {
+    resolveOnce(installed);
 
-    simpleCheckers.forEach(({ checker, command }) => {
-      describe(`${checker.name}Checker`, () => {
-        const [binary, ...args] = command as [string, ...string[]];
-
-        it('should return true for isAvailable when command succeeds', async () => {
-          resolveOnce();
-          const result = await checker.isAvailable();
-          expect(result).toBe(true);
-          expect(mockExeca).toHaveBeenCalledWith(binary, ['--version']);
-        });
-
-        it('should return false for isAvailable when command fails', async () => {
-          rejectOnce();
-          const result = await checker.isAvailable();
-          expect(result).toBe(false);
-        });
-
-        it('should return true for check when package check succeeds', async () => {
-          resolveOnce();
-          const result = await checker.check('testpkg');
-          expect(result).toBe(true);
-          expect(mockExeca).toHaveBeenCalledWith(binary, [...args, 'testpkg']);
-        });
-
-        it('should return false for check when package check fails', async () => {
-          rejectOnce();
-          const result = await checker.check('testpkg');
-          expect(result).toBe(false);
-        });
-      });
-    });
+    expect((await checker.check(pkg)).installed).toBe(true);
+    expect(mockExeca).toHaveBeenCalledWith(binary, args);
   });
 
-  describe('List Checkers (brew)', () => {
-    describe('brewChecker', () => {
-      it('should return true for isAvailable when brew command succeeds', async () => {
-        resolveOnce();
-        const result = await brewChecker.isAvailable();
-        expect(result).toBe(true);
-        expect(mockExeca).toHaveBeenCalledWith('brew', ['--version']);
-      });
+  it("does not match when the marker is absent", async () => {
+    resolveOnce(missing);
 
-      it('should return false for isAvailable when brew command fails', async () => {
-        rejectOnce();
-        const result = await brewChecker.isAvailable();
-        expect(result).toBe(false);
-      });
-
-      it('should return true for check when package is in list', async () => {
-        resolveOnce('git\nnode\npython\n');
-        const result = await brewChecker.check('node');
-        expect(result).toBe(true);
-        expect(mockExeca).toHaveBeenCalledWith('brew', ['list']);
-      });
-
-      it('should return false for check when package is not in list', async () => {
-        resolveOnce('git\npython\n');
-        const result = await brewChecker.check('node');
-        expect(result).toBe(false);
-      });
-    });
+    expect((await checker.check(pkg)).installed).toBe(false);
   });
 
-  describe('Special Checkers (nix, scoop, winget)', () => {
-    describe('nixChecker', () => {
-      it('should return true for isAvailable when nix command succeeds', async () => {
-        resolveOnce();
-        const result = await nixChecker.isAvailable();
-        expect(result).toBe(true);
-        expect(mockExeca).toHaveBeenCalledWith('nix', ['--version']);
-      });
+  it("treats a failed command as not installed", async () => {
+    rejectOnce();
 
-      it('should return false for isAvailable when nix command fails', async () => {
-        rejectOnce();
-        const result = await nixChecker.isAvailable();
-        expect(result).toBe(false);
-      });
+    expect((await checker.check(pkg)).installed).toBe(false);
+  });
+});
 
-      it('should return true for check when package is found via nix-env', async () => {
-        resolveOnce();
-        const result = await nixChecker.check('nodejs');
-        expect(result).toBe(true);
-        expect(mockExeca).toHaveBeenCalledWith('nix-env', ['-q', 'nodejs']);
-      });
+describe.each(listCases)("$name checker", ({ checker, binary, listArgs, output, installed, missing }) => {
+  it("checks availability with --version", async () => {
+    resolveOnce();
 
-      it('should return true for check when package is found via nix profile list', async () => {
-        rejectOnce(); // nix-env fails
-        resolveOnce('nodejs\nnpm\n'); // nix profile list succeeds
+    expect(await checker.isAvailable()).toBe(true);
+    expect(mockExeca).toHaveBeenCalledWith(binary, ["--version"]);
+  });
 
-        const result = await nixChecker.check('nodejs');
-        expect(result).toBe(true);
-      });
+  it("finds a package in the list output", async () => {
+    resolveOnce(output);
 
-      it('should return false for check when package not found in either method', async () => {
-        rejectOnce(); // nix-env fails
-        rejectOnce(); // nix profile list fails
+    expect((await checker.check(installed)).installed).toBe(true);
+    expect(mockExeca).toHaveBeenCalledWith(binary, listArgs);
+  });
 
-        const result = await nixChecker.check('nonexistent');
-        expect(result).toBe(false);
-      });
-    });
+  it("does not report a package that is absent from the list", async () => {
+    resolveOnce(output);
 
-    describe('scoopChecker', () => {
-      it('should return true for isAvailable when scoop command succeeds', async () => {
-        resolveOnce();
-        const result = await scoopChecker.isAvailable();
-        expect(result).toBe(true);
-        expect(mockExeca).toHaveBeenCalledWith('scoop', ['--version']);
-      });
+    expect((await checker.check(missing)).installed).toBe(false);
+  });
 
-      it('should return false for isAvailable when scoop command fails', async () => {
-        rejectOnce();
-        const result = await scoopChecker.isAvailable();
-        expect(result).toBe(false);
-      });
+  it("treats a failed list command as not installed", async () => {
+    rejectOnce();
 
-      it('should return true for check when package is found in scoop list', async () => {
-        resolveOnce('git 2.40.0\nnode 18.17.0\n');
-        const result = await scoopChecker.check('node');
-        expect(result).toBe(true);
-        expect(mockExeca).toHaveBeenCalledWith('scoop', ['list']);
-      });
+    expect((await checker.check(installed)).installed).toBe(false);
+  });
+});
 
-      it('should return false for check when package is not found in scoop list', async () => {
-        resolveOnce('git 2.40.0\npython 3.11.0\n');
-        const result = await scoopChecker.check('node');
-        expect(result).toBe(false);
-      });
-    });
+describe("nix checker", () => {
+  it("checks availability with --version", async () => {
+    resolveOnce();
 
-    describe('wingetChecker', () => {
-      it('should return true for isAvailable when winget command succeeds', async () => {
-        resolveOnce();
-        const result = await wingetChecker.isAvailable();
-        expect(result).toBe(true);
-        expect(mockExeca).toHaveBeenCalledWith('winget', ['--version']);
-      });
+    expect(await nixChecker.isAvailable()).toBe(true);
+    expect(mockExeca).toHaveBeenCalledWith("nix", ["--version"]);
+  });
 
-      it('should return false for isAvailable when winget command fails', async () => {
-        rejectOnce();
-        const result = await wingetChecker.isAvailable();
-        expect(result).toBe(false);
-      });
+  it("checks with nix-env --exact first", async () => {
+    resolveOnce();
 
-      it('should return true for check when package is found in winget list', async () => {
-        resolveOnce('Git.Git 2.40.0\nNodejs.NodeJS 18.17.0\n');
-        const result = await wingetChecker.check('Nodejs.NodeJS');
-        expect(result).toBe(true);
-        expect(mockExeca).toHaveBeenCalledWith('winget', ['list']);
-      });
+    expect((await nixChecker.check("nodejs")).installed).toBe(true);
+    expect(mockExeca).toHaveBeenCalledWith("nix-env", ["-q", "--exact", "nodejs"]);
+  });
 
-      it('should return false for check when package is not found in winget list', async () => {
-        resolveOnce('Git.Git 2.40.0\nPython.Python 3.11.0\n');
-        const result = await wingetChecker.check('Nodejs.NodeJS');
-        expect(result).toBe(false);
-      });
-    });
+  it("falls back to nix profile list and matches a whole token", async () => {
+    rejectOnce();
+    resolveOnce("0 flake:nixpkgs#legacyPackages.x86_64-linux.nodejs /nix/store/abc\n");
+
+    expect((await nixChecker.check("nodejs")).installed).toBe(true);
+    expect(mockExeca).toHaveBeenLastCalledWith("nix", ["profile", "list"]);
+  });
+
+  it("does not match a partial token in nix profile list", async () => {
+    rejectOnce();
+    resolveOnce("0 flake:nixpkgs#legacyPackages.x86_64-linux.nodejs-extra /nix/store/abc\n");
+
+    expect((await nixChecker.check("nodejs")).installed).toBe(false);
+  });
+
+  it("returns false when both commands fail", async () => {
+    rejectOnce();
+    rejectOnce();
+
+    expect((await nixChecker.check("nodejs")).installed).toBe(false);
   });
 });

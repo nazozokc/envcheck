@@ -50,38 +50,52 @@
 `src/checkers/index.ts` に以下を定義し、全チェッカーはこれに従う：
 
 ```typescript
+export interface CheckResult {
+  installed: boolean;
+  version: string | null;
+  reason: "installed" | "not-installed" | "command-failed" | "unavailable";
+}
+
 export interface Checker {
   /** パッケージマネージャー名 (例: "nix", "apt") */
   name: string;
   /** パッケージマネージャーが利用可能か確認する */
   isAvailable(): Promise<boolean>;
   /** 指定パッケージがインストール済みか確認する */
-  check(pkg: string): Promise<boolean>;
+  check(pkg: string): Promise<CheckResult>;
 }
 ```
 
 ### 新しいチェッカーを追加するとき
 
-1. `src/checkers/{name}.ts` を作成し `Checker` を実装する
-2. `src/checkers/index.ts` に export を追加する
-3. `src/index.ts` のチェッカー一覧に登録する
+1. `src/checkers/{name}.ts` を作成し `Checker` を実装する（`baseChecker.ts` のファクトリを優先）
+2. `src/checkers/registry.ts` に登録する
+3. `src/__tests__/checkers.test.ts` に `isAvailable()` と `check()` のテストを追加する
 4. README.md の対応マネージャー一覧を更新する
 
 ### 対応パッケージマネージャー（実装対象）
 
-| マネージャー | 確認コマンド例 |
-|-------------|---------------|
-| nix         | `nix-env -q` / `nix profile list` |
+| マネージャー | 確認コマンド |
+|-------------|-------------|
+| nix         | `nix-env -q --exact {pkg}` → `nix profile list` |
 | pacman      | `pacman -Q {pkg}` |
-| apt         | `dpkg -l {pkg}` |
-| scoop       | `scoop list {pkg}` |
-| homebrew    | `brew list {pkg}` |
-| winget      | `winget list {pkg}` |
-| dnf         | `dnf list installed {pkg}` |
-| zypper      | `zypper se --installed-only {pkg}` |
-| apk         | `apk info {pkg}` |
+| apt         | `dpkg-query -W '-f=${Status}' {pkg}` |
+| scoop       | `scoop list` |
+| homebrew    | `brew list` |
+| winget      | `winget list` |
+| dnf         | `dnf -q list installed {pkg}` |
+| zypper      | `zypper --quiet se --installed-only --exact {pkg}` |
+| apk         | `apk info -e {pkg}` |
 | cargo       | `cargo install --list` |
 | pip         | `pip show {pkg}` |
+| npm         | `npm ls -g --depth=0 {pkg}` |
+| gem         | `gem list -i -e {pkg}` |
+| flatpak     | `flatpak list --app --columns=application` |
+| snap        | `snap list` |
+| choco       | `choco list --local-only --exact {pkg}` |
+| composer    | `composer global show {pkg}` |
+| dotnet      | `dotnet tool list -g` |
+| conda       | `conda list {pkg}` |
 
 追加は自由。上記が基本対象。
 
