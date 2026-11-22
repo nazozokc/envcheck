@@ -1,3 +1,3 @@
 import { createSimpleChecker } from './baseChecker.js';
 
-export const apkChecker = createSimpleChecker('apk', ['apk']);
+export const apkChecker = createSimpleChecker('apk', ['apk', 'info', '-e']);

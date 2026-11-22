@@ -1,81 +1,37 @@
 #!/usr/bin/env node
-import { Command } from "commander";
-import { consola } from "consola";
-import { nixChecker } from "./checkers/nix.js";
-import { aptChecker } from "./checkers/apt.js";
-import { pacmanChecker } from "./checkers/pacman.js";
-import { scoopChecker } from "./checkers/scoop.js";
-import { brewChecker } from "./checkers/brew.js";
-import { wingetChecker } from "./checkers/winget.js";
-import { dnfChecker } from "./checkers/dnf.js";
-import { zypperChecker } from "./checkers/zypper.js";
-import { apkChecker } from "./checkers/apk.js";
-import { cargoChecker } from "./checkers/cargo.js";
-import { pipChecker } from "./checkers/pip.js";
-import type { Checker } from "./checkers/index.js";
+import { consola, createConsola } from "consola";
+import { buildOutcome, printOutcome } from "./cli.js";
+import type { Reporter } from "./cli.js";
+import { checkers } from "./checkers/registry.js";
+import { loadConfig } from "./config.js";
+import type { EnvcheckConfig } from "./config.js";
 
-// Map of checker names to checker instances
-const checkers: Record<string, Checker> = {
-  nix: nixChecker,
-  apt: aptChecker,
-  pacman: pacmanChecker,
-  scoop: scoopChecker,
-  brew: brewChecker,
-  winget: wingetChecker,
-  dnf: dnfChecker,
-  zypper: zypperChecker,
-  apk: apkChecker,
-  cargo: cargoChecker,
-  pip: pipChecker,
+let config: EnvcheckConfig;
+try {
+  config = await loadConfig(process.cwd());
+} catch (error: unknown) {
+  consola.error(error instanceof Error ? error.message : String(error));
+  process.exit(2);
+}
+
+const outcome = await buildOutcome(process.argv.slice(2), checkers, { config });
+const logger = outcome.options.noColor
+  ? createConsola({ formatOptions: { colors: false } })
+  : consola;
+
+const reporter: Reporter = {
+  success: (message: string): void => {
+    logger.success(message);
+  },
+  error: (message: string): void => {
+    logger.error(message);
+  },
+  info: (message: string): void => {
+    logger.info(message);
+  },
+  raw: (message: string): void => {
+    process.stdout.write(`${message}\n`);
+  },
 };
 
-const program = new Command();
-
-program
-  .name("envcheck")
-  .description(
-    "CLI tool to check if packages are installed via various package managers",
-  )
-  .argument(
-    "<manager>",
-    "package manager to use (nix, apt, pacman, scoop, brew, winget, dnf, zypper, apk, cargo, pip)",
-  )
-  .argument("<packages...>", "packages to check")
-  .action(async (manager: string, packages: string[]) => {
-    const checker = checkers[manager];
-
-    if (!checker) {
-      consola.error(`Unsupported package manager: ${manager}`);
-      consola.info(`Supported managers: ${Object.keys(checkers).join(", ")}`);
-      process.exit(2);
-    }
-
-    if (!(await checker.isAvailable())) {
-      consola.error(`${manager} is not available on this system`);
-      process.exit(2);
-    }
-
-     let allOk = true;
-
-     for (const pkg of packages) {
-       const isInstalled = await checker.check(pkg);
-       const status = isInstalled ? "OK" : "NG";
-
-       // Pad package name for alignment (max 20 chars)
-       const paddedPkg = pkg.padEnd(20);
-       if (isInstalled) {
-         consola.success(`[${manager}] ${paddedPkg} ... ${status}`);
-       } else {
-         consola.error(`[${manager}] ${paddedPkg} ... ${status}`);
-       }
-
-       if (!isInstalled) {
-         allOk = false;
-       }
-     }
-
-    process.exit(allOk ? 0 : 1);
-  });
-
-program.parse();
-
+process.exit(printOutcome(outcome, reporter));

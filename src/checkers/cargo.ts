@@ -1,3 +1,7 @@
-import { createSimpleChecker } from './baseChecker.js';
+import { createListChecker, firstColumn } from './baseChecker.js';
 
-export const cargoChecker = createSimpleChecker('cargo', ['cargo', 'install', '--list']);
+export const cargoChecker = createListChecker(
+  'cargo',
+  ['cargo', 'install', '--list'],
+  firstColumn,
+);

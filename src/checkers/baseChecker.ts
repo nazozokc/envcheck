@@ -1,67 +1,108 @@
-import { execa } from 'execa';
-import type { Checker } from './index.js';
+import { execa } from "execa";
+import type { CheckReason, Checker, CheckResult } from "./index.js";
 
-/**
- * Base checker utility to reduce code duplication for checkers that:
- * - Check availability by running a version-like command
- * - Check package by running a command that takes the package as an argument and exits with 0 if installed
- */
+type CommandParts = [string, ...string[]];
+
+const notInstalled: CheckResult = {
+  installed: false,
+  version: null,
+  reason: "not-installed",
+};
+
+function failureReason(error: unknown): CheckReason {
+  if (
+    error !== null &&
+    typeof error === "object" &&
+    "code" in error &&
+    error.code === "ENOENT"
+  ) {
+    return "unavailable";
+  }
+  return "command-failed";
+}
+
+export function failureResult(error: unknown): CheckResult {
+  return { installed: false, version: null, reason: failureReason(error) };
+}
+
+export function extractVersion(text: string): string | null {
+  const match: RegExpMatchArray | null = text.match(/v?\d+\.\d+(?:\.\d+)?/);
+  return match?.[0] ?? null;
+}
+
+function isAvailableViaVersion(binary: string): () => Promise<boolean> {
+  return async (): Promise<boolean> => {
+    try {
+      await execa(binary, ["--version"]);
+      return true;
+    } catch {
+      // A missing binary or a failed version command both mean unavailable.
+      return false;
+    }
+  };
+}
+
+/** Check a package by relying on the command's exit code alone. */
 export const createSimpleChecker = (
   name: string,
-  [command, ...args]: [string, ...string[]],
-): Checker => {
-  return {
-    name,
+  [binary, ...args]: CommandParts,
+): Checker => ({
+  name,
+  isAvailable: isAvailableViaVersion(binary),
+  async check(pkg: string): Promise<CheckResult> {
+    try {
+      const { stdout } = await execa(binary, [...args, pkg]);
+      return { installed: true, version: extractVersion(stdout), reason: "installed" };
+    } catch (error: unknown) {
+      return failureResult(error);
+    }
+  },
+});
 
-    async isAvailable(): Promise<boolean> {
-      try {
-        await execa(command, ['--version']);
-        return true;
-      } catch {
-        return false;
+/** Check a package by inspecting the command's stdout for a marker. */
+export const createOutputChecker = (
+  name: string,
+  [binary, ...args]: CommandParts,
+  isMatch: (stdout: string, pkg: string) => boolean,
+): Checker => ({
+  name,
+  isAvailable: isAvailableViaVersion(binary),
+  async check(pkg: string): Promise<CheckResult> {
+    try {
+      const { stdout } = await execa(binary, [...args, pkg]);
+      if (!isMatch(stdout, pkg)) {
+        return notInstalled;
       }
-    },
+      return { installed: true, version: extractVersion(stdout), reason: "installed" };
+    } catch (error: unknown) {
+      return failureResult(error);
+    }
+  },
+});
 
-    async check(pkg: string): Promise<boolean> {
-      try {
-        await execa(command, [...args, pkg]);
-        return true;
-      } catch {
-        return false;
-      }
-    },
-  };
-};
+/** Extract the first whitespace-delimited column from a list output line. */
+export const firstColumn = (line: string): string => line.trim().split(/\s+/)[0] ?? "";
 
-/**
- * Base checker utility for checkers that:
- * - Check availability by running a version-like command
- * - Check package by running a command that outputs a list of installed packages and checking if the package is in that list
- */
+/** Check a package against a command that lists installed packages. */
 export const createListChecker = (
   name: string,
-  [command, ...args]: [string, ...string[]],
-): Checker => {
-  return {
-    name,
-
-    async isAvailable(): Promise<boolean> {
-      try {
-        await execa(command, ['--version']);
-        return true;
-      } catch {
-        return false;
+  [binary, ...args]: CommandParts,
+  parseLine: (line: string) => string = (line: string): string => line.trim(),
+): Checker => ({
+  name,
+  isAvailable: isAvailableViaVersion(binary),
+  async check(pkg: string): Promise<CheckResult> {
+    try {
+      const { stdout } = await execa(binary, args);
+      const matched: string | undefined = stdout
+        .split("\n")
+        .find((line: string): boolean => parseLine(line) === pkg);
+      if (matched === undefined) {
+        return notInstalled;
       }
-    },
-
-    async check(pkg: string): Promise<boolean> {
-      try {
-        const { stdout } = await execa(command, args);
-        const lines = stdout.trim().split('\n').map((line) => line.trim());
-        return lines.includes(pkg);
-      } catch {
-        return false;
-      }
-    },
-  };
-};
+      return { installed: true, version: extractVersion(matched), reason: "installed" };
+    } catch (error: unknown) {
+      return failureResult(error);
+    }
+  },
+});
