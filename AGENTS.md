@@ -6,7 +6,7 @@
 各種パッケージマネージャー経由でインストールされているかを確認する CLI ツール。
 
 - **言語**: TypeScript
-- **ランタイム**: Bun
+- **ランタイム**: Node.js（パッケージマネージャーは pnpm）
 - **出力形式**: シンプルな OK / NG 表示
 
 ---
@@ -14,7 +14,6 @@
 ## ディレクトリ構成
 
 ```
-envcheck/
 ├── src/
 │   ├── index.ts          # エントリポイント・CLI引数パース
 │   ├── checkers/         # パッケージマネージャーごとのチェッカー
@@ -36,10 +35,11 @@ envcheck/
 
 ## 技術スタック・バージョン制約
 
-- **Bun**: 最新安定版を使う
+- **Node.js**: 最新 LTS を使う
+- **pnpm**: パッケージマネージャーは pnpm のみを使う
 - **TypeScript**: strict モード必須（`tsconfig.json` の `strict: true`）
 - **依存ライブラリ**: 最小限に抑える。Commander.js / Consola / Clack は使ってよい
-- `bun run` でビルド・実行すること。`npm run` は使わない
+- ビルドは `tsc`、テストは Vitest。`pnpm run` で実行すること
 
 ---
 
@@ -128,14 +128,14 @@ envcheck apt git
 - エラーは絶対に握りつぶさない。`try/catch` で明示的に処理する
 - 型は明示的に書く。`any` は禁止
 - `console.log` は使わない。Consola か Clack を使う
-- 外部コマンドの実行は `Bun.spawnSync` か `execa` を使う
+- 外部コマンドの実行は `execa` を使う
 
 ---
 
 ## テスト
 
 - テストファイルは `src/__tests__/` に置く
-- `bun test` で実行できるようにする
+- `pnpm test`（Vitest）で実行できるようにする
 - 各チェッカーの `isAvailable()` と `check()` には必ずユニットテストを書く
 - 外部コマンドはモックする（実際のシステムに依存しないこと）
 
@@ -163,4 +163,4 @@ docs: update supported managers in README
 - `console.log` の直接使用
 - チェッカーのインターフェースを変更する場合は、全チェッカーへの影響を必ず確認してから変更する
 - ルートに直接ファイルを増やさない（`src/` 配下に置く）
-- `npm install` / `npm run` の使用（Bun を使う）
+- `npm` / `yarn` / `bun` の使用（pnpm を使う）

@@ -1,4 +1,3 @@
-import { execa } from 'execa';
-import { createSimpleChecker } from './baseChecker';
+import { createSimpleChecker } from './baseChecker.js';
 
 export const cargoChecker = createSimpleChecker('cargo', ['cargo', 'install', '--list']);
