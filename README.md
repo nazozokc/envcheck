@@ -6,7 +6,7 @@
 ## インストール
 
 ```bash
-bunx envcheck <package-manager> <tools...>
+pnpm dlx @nazozokc/envcheck <package-manager> <tools...>
 ```
 
 ## 使用方法
@@ -58,7 +58,8 @@ envcheck brew git python node
 
 ### 必要なもの
 
-- Bun (最新安定版)
+- Node.js (最新 LTS)
+- pnpm
 - TypeScript (strict モード)
 
 ### チェッカーの追加方法
@@ -71,7 +72,10 @@ envcheck brew git python node
 ### テスト
 
 ```bash
-bun test
+pnpm install
+pnpm test
+pnpm typecheck
+pnpm build
 ```
 
 ## コミット規約

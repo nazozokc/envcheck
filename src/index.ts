@@ -12,9 +12,10 @@ import { zypperChecker } from "./checkers/zypper.js";
 import { apkChecker } from "./checkers/apk.js";
 import { cargoChecker } from "./checkers/cargo.js";
 import { pipChecker } from "./checkers/pip.js";
+import type { Checker } from "./checkers/index.js";
 
 // Map of checker names to checker instances
-const checkers: Record<string, any> = {
+const checkers: Record<string, Checker> = {
   nix: nixChecker,
   apt: aptChecker,
   pacman: pacmanChecker,
@@ -40,7 +41,7 @@ program
     "package manager to use (nix, apt, pacman, scoop, brew, winget, dnf, zypper, apk, cargo, pip)",
   )
   .argument("<packages...>", "packages to check")
-  .action(async (manager, packages) => {
+  .action(async (manager: string, packages: string[]) => {
     const checker = checkers[manager];
 
     if (!checker) {

@@ -1,24 +1,33 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'bun:test';
-import { nixChecker } from '../checkers/nix';
-import { aptChecker } from '../checkers/apt';
-import { pacmanChecker } from '../checkers/pacman';
-import { dnfChecker } from '../checkers/dnf';
-import { zypperChecker } from '../checkers/zypper';
-import { apkChecker } from '../checkers/apk';
-import { cargoChecker } from '../checkers/cargo';
-import { pipChecker } from '../checkers/pip';
-import { scoopChecker } from '../checkers/scoop';
-import { wingetChecker } from '../checkers/winget';
-import { brewChecker } from '../checkers/brew';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { execa } from 'execa';
+import { nixChecker } from '../checkers/nix.js';
+import { aptChecker } from '../checkers/apt.js';
+import { pacmanChecker } from '../checkers/pacman.js';
+import { dnfChecker } from '../checkers/dnf.js';
+import { zypperChecker } from '../checkers/zypper.js';
+import { apkChecker } from '../checkers/apk.js';
+import { cargoChecker } from '../checkers/cargo.js';
+import { pipChecker } from '../checkers/pip.js';
+import { scoopChecker } from '../checkers/scoop.js';
+import { wingetChecker } from '../checkers/winget.js';
+import { brewChecker } from '../checkers/brew.js';
 
-// Mock execa globally
-vi.mock('execa', async () => {
-  const actual = await vi.importActual('execa');
-  return {
-    ...actual,
-    default: vi.fn(),
-  };
+vi.mock('execa', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('execa')>();
+  return { ...actual, execa: vi.fn() };
 });
+
+const mockExeca = vi.mocked(execa);
+
+const resolveOnce = (stdout = ''): void => {
+  mockExeca.mockResolvedValueOnce({
+    stdout,
+  } as unknown as Awaited<ReturnType<typeof execa>>);
+};
+
+const rejectOnce = (): void => {
+  mockExeca.mockRejectedValueOnce(new Error('command failed'));
+};
 
 describe('Checker Interface - Basic Structure', () => {
   const checkers = [
@@ -35,7 +44,7 @@ describe('Checker Interface - Basic Structure', () => {
     brewChecker,
   ];
 
-  checkers.forEach(checker => {
+  checkers.forEach((checker) => {
     describe(`${checker.name}Checker`, () => {
       it('should have a name property', () => {
         expect(checker.name).toBeDefined();
@@ -54,15 +63,8 @@ describe('Checker Interface - Basic Structure', () => {
 });
 
 describe('Checker Functionality', () => {
-  // Get the mocked execa
-  const mockExeca = require('execa').default;
-
   beforeEach(() => {
     vi.resetAllMocks();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
   });
 
   describe('Simple Checkers (apt, pacman, dnf, zypper, apk, cargo, pip)', () => {
@@ -78,28 +80,30 @@ describe('Checker Functionality', () => {
 
     simpleCheckers.forEach(({ checker, command }) => {
       describe(`${checker.name}Checker`, () => {
+        const [binary, ...args] = command as [string, ...string[]];
+
         it('should return true for isAvailable when command succeeds', async () => {
-          mockExeca.mockResolvedValueOnce({});
+          resolveOnce();
           const result = await checker.isAvailable();
           expect(result).toBe(true);
-          expect(mockExeca).toHaveBeenCalledWith(command[0], [...command.slice(1), '--version']);
+          expect(mockExeca).toHaveBeenCalledWith(binary, ['--version']);
         });
 
         it('should return false for isAvailable when command fails', async () => {
-          mockExeca.mockRejectedValueOnce(new Error('command not found'));
+          rejectOnce();
           const result = await checker.isAvailable();
           expect(result).toBe(false);
         });
 
         it('should return true for check when package check succeeds', async () => {
-          mockExeca.mockResolvedValueOnce({});
+          resolveOnce();
           const result = await checker.check('testpkg');
           expect(result).toBe(true);
-          expect(mockExeca).toHaveBeenCalledWith(command[0], [...command.slice(1), 'testpkg']);
+          expect(mockExeca).toHaveBeenCalledWith(binary, [...args, 'testpkg']);
         });
 
         it('should return false for check when package check fails', async () => {
-          mockExeca.mockRejectedValueOnce(new Error('package not found'));
+          rejectOnce();
           const result = await checker.check('testpkg');
           expect(result).toBe(false);
         });
@@ -110,27 +114,27 @@ describe('Checker Functionality', () => {
   describe('List Checkers (brew)', () => {
     describe('brewChecker', () => {
       it('should return true for isAvailable when brew command succeeds', async () => {
-        mockExeca.mockResolvedValueOnce({});
+        resolveOnce();
         const result = await brewChecker.isAvailable();
         expect(result).toBe(true);
         expect(mockExeca).toHaveBeenCalledWith('brew', ['--version']);
       });
 
       it('should return false for isAvailable when brew command fails', async () => {
-        mockExeca.mockRejectedValueOnce(new Error('command not found'));
+        rejectOnce();
         const result = await brewChecker.isAvailable();
         expect(result).toBe(false);
       });
 
       it('should return true for check when package is in list', async () => {
-        mockExeca.mockResolvedValueOnce({ stdout: 'git\nnode\npython\n' });
+        resolveOnce('git\nnode\npython\n');
         const result = await brewChecker.check('node');
         expect(result).toBe(true);
         expect(mockExeca).toHaveBeenCalledWith('brew', ['list']);
       });
 
       it('should return false for check when package is not in list', async () => {
-        mockExeca.mockResolvedValueOnce({ stdout: 'git\npython\n' });
+        resolveOnce('git\npython\n');
         const result = await brewChecker.check('node');
         expect(result).toBe(false);
       });
@@ -140,39 +144,37 @@ describe('Checker Functionality', () => {
   describe('Special Checkers (nix, scoop, winget)', () => {
     describe('nixChecker', () => {
       it('should return true for isAvailable when nix command succeeds', async () => {
-        mockExeca.mockResolvedValueOnce({});
+        resolveOnce();
         const result = await nixChecker.isAvailable();
         expect(result).toBe(true);
         expect(mockExeca).toHaveBeenCalledWith('nix', ['--version']);
       });
 
       it('should return false for isAvailable when nix command fails', async () => {
-        mockExeca.mockRejectedValueOnce(new Error('command not found'));
+        rejectOnce();
         const result = await nixChecker.isAvailable();
         expect(result).toBe(false);
       });
 
       it('should return true for check when package is found via nix-env', async () => {
-        mockExeca.mockResolvedValueOnce({});
+        resolveOnce();
         const result = await nixChecker.check('nodejs');
         expect(result).toBe(true);
         expect(mockExeca).toHaveBeenCalledWith('nix-env', ['-q', 'nodejs']);
       });
 
       it('should return true for check when package is found via nix profile list', async () => {
-        mockExeca
-          .mockRejectedValueOnce(new Error('package not found')) // nix-env fails
-          .mockResolvedValueOnce({ stdout: 'nodejs\nnpm\n' }); // nix profile list succeeds
-        
+        rejectOnce(); // nix-env fails
+        resolveOnce('nodejs\nnpm\n'); // nix profile list succeeds
+
         const result = await nixChecker.check('nodejs');
         expect(result).toBe(true);
       });
 
       it('should return false for check when package not found in either method', async () => {
-        mockExeca
-          .mockRejectedValueOnce(new Error('package not found')) // nix-env fails
-          .mockRejectedValueOnce(new Error('command failed')); // nix profile list fails
-        
+        rejectOnce(); // nix-env fails
+        rejectOnce(); // nix profile list fails
+
         const result = await nixChecker.check('nonexistent');
         expect(result).toBe(false);
       });
@@ -180,27 +182,27 @@ describe('Checker Functionality', () => {
 
     describe('scoopChecker', () => {
       it('should return true for isAvailable when scoop command succeeds', async () => {
-        mockExeca.mockResolvedValueOnce({});
+        resolveOnce();
         const result = await scoopChecker.isAvailable();
         expect(result).toBe(true);
         expect(mockExeca).toHaveBeenCalledWith('scoop', ['--version']);
       });
 
       it('should return false for isAvailable when scoop command fails', async () => {
-        mockExeca.mockRejectedValueOnce(new Error('command not found'));
+        rejectOnce();
         const result = await scoopChecker.isAvailable();
         expect(result).toBe(false);
       });
 
       it('should return true for check when package is found in scoop list', async () => {
-        mockExeca.mockResolvedValueOnce({ stdout: 'git 2.40.0\nnode 18.17.0\n' });
+        resolveOnce('git 2.40.0\nnode 18.17.0\n');
         const result = await scoopChecker.check('node');
         expect(result).toBe(true);
         expect(mockExeca).toHaveBeenCalledWith('scoop', ['list']);
       });
 
       it('should return false for check when package is not found in scoop list', async () => {
-        mockExeca.mockResolvedValueOnce({ stdout: 'git 2.40.0\npython 3.11.0\n' });
+        resolveOnce('git 2.40.0\npython 3.11.0\n');
         const result = await scoopChecker.check('node');
         expect(result).toBe(false);
       });
@@ -208,27 +210,27 @@ describe('Checker Functionality', () => {
 
     describe('wingetChecker', () => {
       it('should return true for isAvailable when winget command succeeds', async () => {
-        mockExeca.mockResolvedValueOnce({});
+        resolveOnce();
         const result = await wingetChecker.isAvailable();
         expect(result).toBe(true);
         expect(mockExeca).toHaveBeenCalledWith('winget', ['--version']);
       });
 
       it('should return false for isAvailable when winget command fails', async () => {
-        mockExeca.mockRejectedValueOnce(new Error('command not found'));
+        rejectOnce();
         const result = await wingetChecker.isAvailable();
         expect(result).toBe(false);
       });
 
       it('should return true for check when package is found in winget list', async () => {
-        mockExeca.mockResolvedValueOnce({ stdout: 'Git.Git 2.40.0\nNodejs.NodeJS 18.17.0\n' });
+        resolveOnce('Git.Git 2.40.0\nNodejs.NodeJS 18.17.0\n');
         const result = await wingetChecker.check('Nodejs.NodeJS');
         expect(result).toBe(true);
         expect(mockExeca).toHaveBeenCalledWith('winget', ['list']);
       });
 
       it('should return false for check when package is not found in winget list', async () => {
-        mockExeca.mockResolvedValueOnce({ stdout: 'Git.Git 2.40.0\nPython.Python 3.11.0\n' });
+        resolveOnce('Git.Git 2.40.0\nPython.Python 3.11.0\n');
         const result = await wingetChecker.check('Nodejs.NodeJS');
         expect(result).toBe(false);
       });
